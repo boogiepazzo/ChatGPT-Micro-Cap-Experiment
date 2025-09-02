@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio History - Trading Portfolio{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-history"></i> Portfolio History</h1>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-table"></i> Historical Performance</h5>
+            </div>
+            <div class="card-body">
+                {% if history %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Total Value</th>
+                                <th>Cash Balance</th>
+                                <th>Total Equity</th>
+                                <th>P&L</th>
+                                <th>Daily Change</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in history %}
+                            <tr>
+                                <td>
+                                    <strong>{{ entry.date }}</strong>
+                                </td>
+                                <td>${{ "%.2f"|format(entry.total_value) }}</td>
+                                <td>${{ "%.2f"|format(entry.cash_balance) }}</td>
+                                <td>
+                                    <strong>${{ "%.2f"|format(entry.total_equity) }}</strong>
+                                </td>
+                                <td class="{{ 'positive' if entry.pnl >= 0 else 'negative' }}">
+                                    ${{ "%.2f"|format(entry.pnl) }}
+                                </td>
+                                <td class="{{ 'positive' if entry.pnl >= 0 else 'negative' }}">
+                                    {% if loop.index > 1 %}
+                                        {% set prev_equity = history[loop.index - 2].total_equity %}
+                                        {% set change = ((entry.total_equity - prev_equity) / prev_equity * 100) %}
+                                        {{ "%.2f"|format(change) }}%
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Summary Statistics -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-calculator"></i> Summary Statistics</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h6 class="text-muted">Total Days</h6>
+                                            <h4>{{ history|length }}</h4>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h6 class="text-muted">Starting Equity</h6>
+                                            <h4>${{ "%.2f"|format(history[0].total_equity) }}</h4>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h6 class="text-muted">Current Equity</h6>
+                                            <h4>${{ "%.2f"|format(history[-1].total_equity) }}</h4>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h6 class="text-muted">Total Gain/Loss</h6>
+                                            {% set total_change = history[-1].total_equity - history[0].total_equity %}
+                                            <h4 class="{{ 'positive' if total_change >= 0 else 'negative' }}">
+                                                ${{ "%.2f"|format(total_change) }}
+                                            </h4>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Performance Chart -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-chart-line"></i> Equity Growth Chart</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="historyChart" width="400" height="200"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No portfolio history available</h5>
+                    <p class="text-muted">Run the daily update to start tracking your portfolio performance</p>
+                    <a href="{{ url_for('run_daily_update') }}" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> Run Daily Update
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Options -->
+{% if history %}
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-download"></i> Export Data</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Export Options:</h6>
+                        <ul>
+                            <li>CSV file with all historical data</li>
+                            <li>PDF report with charts and analysis</li>
+                            <li>Excel spreadsheet with formulas</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-primary" onclick="exportCSV()">
+                                <i class="fas fa-file-csv"></i> Export as CSV
+                            </button>
+                            <button class="btn btn-outline-success" onclick="exportPDF()">
+                                <i class="fas fa-file-pdf"></i> Export as PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+{% if history %}
+// Create history chart
+const ctx = document.getElementById('historyChart').getContext('2d');
+const historyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: [{% for entry in history %}'{{ entry.date }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+        datasets: [{
+            label: 'Total Equity',
+            data: [{% for entry in history %}{{ entry.total_equity }}{% if not loop.last %}, {% endif %}{% endfor %}],
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1,
+            fill: true
+        }, {
+            label: 'Cash Balance',
+            data: [{% for entry in history %}{{ entry.cash_balance }}{% if not loop.last %}, {% endif %}{% endfor %}],
+            borderColor: 'rgb(255, 99, 132)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            tension: 0.1,
+            fill: false
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            title: {
+                display: true,
+                text: 'Portfolio Performance Over Time'
+            },
+            legend: {
+                display: true,
+                position: 'top'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: false,
+                ticks: {
+                    callback: function(value) {
+                        return '$' + value.toLocaleString();
+                    }
+                }
+            },
+            x: {
+                ticks: {
+                    maxTicksLimit: 10
+                }
+            }
+        }
+    }
+});
+
+// Export functions
+function exportCSV() {
+    const headers = ['Date', 'Total Value', 'Cash Balance', 'Total Equity', 'P&L'];
+    const csvContent = [
+        headers.join(','),
+        {% for entry in history %}
+        '{{ entry.date }}',{{ entry.total_value }},{{ entry.cash_balance }},{{ entry.total_equity }},{{ entry.pnl }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'portfolio_history.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+}
+
+function exportPDF() {
+    alert('PDF export functionality would be implemented here. For now, you can use the browser\'s print function.');
+    window.print();
+}
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,463 @@
+{% extends "base.html" %}
+
+{% block title %}Trade - Trading Portfolio{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-exchange-alt"></i> Execute Trade</h1>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-edit"></i> Trade Form</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="tradeForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="ticker" class="form-label">Ticker Symbol *</label>
+                                <div class="position-relative">
+                                    <input type="text" class="form-control" id="ticker" name="ticker" 
+                                           value="{{ request.args.get('ticker', '') }}" 
+                                           placeholder="e.g., AAPL" required autocomplete="off">
+                                    <div id="tickerDropdown" class="dropdown-menu w-100" style="display: none; max-height: 200px; overflow-y: auto;">
+                                        <!-- Ticker suggestions will be populated here -->
+                                    </div>
+                                </div>
+                                <div class="form-text">Start typing to see available tickers</div>
+                                <div id="tickerInfo" class="mt-2" style="display: none;">
+                                    <small class="text-muted">
+                                        <span id="tickerName"></span> | 
+                                        <span id="tickerSector"></span> | 
+                                        <span id="tickerPrice"></span>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="action" class="form-label">Action *</label>
+                                <select class="form-select" id="action" name="action" required>
+                                    <option value="BUY" {{ 'selected' if request.args.get('action') == 'SELL' else '' }}>Buy</option>
+                                    <option value="SELL" {{ 'selected' if request.args.get('action') == 'SELL' else '' }}>Sell</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="shares" class="form-label">Number of Shares *</label>
+                                <input type="number" class="form-control" id="shares" name="shares" 
+                                       step="0.01" min="0.01" placeholder="100" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="price" class="form-label">Price per Share *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="price" name="price" 
+                                           step="0.01" min="0.01" placeholder="150.00" required>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="getCurrentPrice()">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="stop_loss" class="form-label">Stop Loss (Optional)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="stop_loss" name="stop_loss" 
+                                           step="0.01" min="0" placeholder="140.00">
+                                </div>
+                                <div class="form-text">Only applies to buy orders</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Total Cost</label>
+                                <div class="form-control-plaintext" id="totalCost">$0.00</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" class="btn btn-secondary me-md-2" onclick="resetForm()">
+                            <i class="fas fa-undo"></i> Reset
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-check"></i> Execute Trade
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Current Portfolio Summary -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-wallet"></i> Portfolio Summary</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <small class="text-muted">Cash Balance</small>
+                        <div class="h6 text-success" id="cashBalance">${{ "%.2f"|format(cash_balance) }}</div>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Total Value</small>
+                        <div class="h6 text-primary" id="totalValue">${{ "%.2f"|format(total_value) }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Current Positions -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-list"></i> Current Positions</h6>
+            </div>
+            <div class="card-body">
+                {% if portfolio %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Shares</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for position in portfolio %}
+                            <tr>
+                                <td><strong>{{ position.ticker }}</strong></td>
+                                <td>{{ "%.2f"|format(position.shares) }}</td>
+                                <td>${{ "%.2f"|format(position.current_value) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center">No positions</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Trade Preview Modal -->
+<div class="modal fade" id="tradePreviewModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Trade</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="tradePreviewContent">
+                    <!-- Trade details will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="confirmTrade()">Confirm Trade</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let searchTimeout;
+let selectedTickerIndex = -1;
+
+// Calculate total cost when shares or price changes
+function calculateTotalCost() {
+    const shares = parseFloat(document.getElementById('shares').value) || 0;
+    const price = parseFloat(document.getElementById('price').value) || 0;
+    const total = shares * price;
+    document.getElementById('totalCost').textContent = `$${total.toFixed(2)}`;
+}
+
+// Search tickers as user types
+function searchTickers(query) {
+    if (query.length < 1) {
+        hideTickerDropdown();
+        return;
+    }
+
+    fetch(`/api/search_tickers?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            displayTickerSuggestions(data.tickers, query);
+        })
+        .catch(error => {
+            console.error('Error searching tickers:', error);
+        });
+}
+
+// Display ticker suggestions in dropdown
+function displayTickerSuggestions(tickers, query) {
+    const dropdown = document.getElementById('tickerDropdown');
+    
+    if (tickers.length === 0) {
+        dropdown.innerHTML = '<div class="dropdown-item text-muted">No tickers found</div>';
+    } else {
+        dropdown.innerHTML = tickers.map((ticker, index) => {
+            const highlightedTicker = ticker.replace(new RegExp(query, 'gi'), `<strong>${query}</strong>`);
+            return `<div class="dropdown-item ticker-suggestion" data-ticker="${ticker}" data-index="${index}">${highlightedTicker}</div>`;
+        }).join('');
+    }
+    
+    dropdown.style.display = 'block';
+    selectedTickerIndex = -1;
+}
+
+// Hide ticker dropdown
+function hideTickerDropdown() {
+    document.getElementById('tickerDropdown').style.display = 'none';
+    selectedTickerIndex = -1;
+}
+
+// Get ticker information and update form
+function getTickerInfo(ticker) {
+    fetch(`/api/ticker_info/${ticker}`)
+        .then(response => response.json())
+        .then(data => {
+            // Update ticker info display
+            document.getElementById('tickerName').textContent = data.name || ticker;
+            document.getElementById('tickerSector').textContent = data.sector || 'Unknown';
+            document.getElementById('tickerPrice').textContent = data.current_price ? `$${data.current_price.toFixed(2)}` : 'Price unavailable';
+            document.getElementById('tickerInfo').style.display = 'block';
+            
+            // Auto-populate price if available
+            if (data.current_price) {
+                document.getElementById('price').value = data.current_price.toFixed(2);
+                calculateTotalCost();
+            }
+        })
+        .catch(error => {
+            console.error('Error getting ticker info:', error);
+            // Fallback to just getting price
+            getCurrentPrice();
+        });
+}
+
+// Get current price for the ticker (fallback)
+function getCurrentPrice() {
+    const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+    if (!ticker) {
+        alert('Please enter a ticker symbol first');
+        return;
+    }
+
+    fetch(`/api/price/${ticker}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.price) {
+                document.getElementById('price').value = data.price.toFixed(2);
+                calculateTotalCost();
+            } else {
+                alert(`Unable to fetch price for ${ticker}`);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error fetching price');
+        });
+}
+
+// Reset form
+function resetForm() {
+    document.getElementById('tradeForm').reset();
+    document.getElementById('totalCost').textContent = '$0.00';
+    hideTickerDropdown();
+    document.getElementById('tickerInfo').style.display = 'none';
+}
+
+// Show trade preview
+function showTradePreview() {
+    const ticker = document.getElementById('ticker').value;
+    const action = document.getElementById('action').value;
+    const shares = document.getElementById('shares').value;
+    const price = document.getElementById('price').value;
+    const totalCost = document.getElementById('totalCost').textContent;
+    const stopLoss = document.getElementById('stop_loss').value;
+
+    const previewContent = `
+        <div class="row">
+            <div class="col-6"><strong>Action:</strong></div>
+            <div class="col-6">${action}</div>
+        </div>
+        <div class="row">
+            <div class="col-6"><strong>Ticker:</strong></div>
+            <div class="col-6">${ticker}</div>
+        </div>
+        <div class="row">
+            <div class="col-6"><strong>Shares:</strong></div>
+            <div class="col-6">${shares}</div>
+        </div>
+        <div class="row">
+            <div class="col-6"><strong>Price:</strong></div>
+            <div class="col-6">$${price}</div>
+        </div>
+        <div class="row">
+            <div class="col-6"><strong>Total Cost:</strong></div>
+            <div class="col-6">${totalCost}</div>
+        </div>
+        ${stopLoss ? `
+        <div class="row">
+            <div class="col-6"><strong>Stop Loss:</strong></div>
+            <div class="col-6">$${stopLoss}</div>
+        </div>
+        ` : ''}
+    `;
+
+    document.getElementById('tradePreviewContent').innerHTML = previewContent;
+    new bootstrap.Modal(document.getElementById('tradePreviewModal')).show();
+}
+
+// Confirm and submit trade
+function confirmTrade() {
+    document.getElementById('tradeForm').submit();
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    const tickerInput = document.getElementById('ticker');
+    const dropdown = document.getElementById('tickerDropdown');
+    
+    // Ticker input event listeners
+    tickerInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        
+        // Clear previous timeout
+        clearTimeout(searchTimeout);
+        
+        // Set new timeout for search
+        searchTimeout = setTimeout(() => {
+            searchTickers(query);
+        }, 300); // 300ms delay to avoid too many requests
+    });
+    
+    // Handle ticker selection from dropdown
+    dropdown.addEventListener('click', function(e) {
+        if (e.target.classList.contains('ticker-suggestion')) {
+            const ticker = e.target.dataset.ticker;
+            tickerInput.value = ticker;
+            hideTickerDropdown();
+            getTickerInfo(ticker);
+        }
+    });
+    
+    // Handle keyboard navigation in dropdown
+    tickerInput.addEventListener('keydown', function(e) {
+        const suggestions = document.querySelectorAll('.ticker-suggestion');
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedTickerIndex = Math.min(selectedTickerIndex + 1, suggestions.length - 1);
+            updateSelectedTicker();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedTickerIndex = Math.max(selectedTickerIndex - 1, -1);
+            updateSelectedTicker();
+        } else if (e.key === 'Enter' && selectedTickerIndex >= 0) {
+            e.preventDefault();
+            const selectedTicker = suggestions[selectedTickerIndex].dataset.ticker;
+            tickerInput.value = selectedTicker;
+            hideTickerDropdown();
+            getTickerInfo(selectedTicker);
+        } else if (e.key === 'Escape') {
+            hideTickerDropdown();
+        }
+    });
+    
+    // Hide dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!tickerInput.contains(e.target) && !dropdown.contains(e.target)) {
+            hideTickerDropdown();
+        }
+    });
+    
+    // Update selected ticker visual
+    function updateSelectedTicker() {
+        const suggestions = document.querySelectorAll('.ticker-suggestion');
+        suggestions.forEach((suggestion, index) => {
+            if (index === selectedTickerIndex) {
+                suggestion.classList.add('active');
+            } else {
+                suggestion.classList.remove('active');
+            }
+        });
+    }
+    
+    // Other event listeners
+    document.getElementById('shares').addEventListener('input', calculateTotalCost);
+    document.getElementById('price').addEventListener('input', calculateTotalCost);
+    
+    // Form submission with preview
+    document.getElementById('tradeForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        showTradePreview();
+    });
+    
+    // Auto-populate ticker info if ticker is pre-filled
+    const preFilledTicker = tickerInput.value.trim();
+    if (preFilledTicker) {
+        getTickerInfo(preFilledTicker);
+    }
+});
+</script>
+
+<style>
+.dropdown-item.ticker-suggestion {
+    cursor: pointer;
+    padding: 8px 12px;
+}
+
+.dropdown-item.ticker-suggestion:hover,
+.dropdown-item.ticker-suggestion.active {
+    background-color: #f8f9fa;
+}
+
+.dropdown-item.ticker-suggestion strong {
+    color: #007bff;
+}
+
+#tickerDropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    border: 1px solid #ced4da;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+</style>
+{% endblock %}
