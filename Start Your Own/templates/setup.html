@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Setup - Trading Portfolio{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header text-center">
+                <h3><i class="fas fa-rocket"></i> Welcome to Trading Portfolio</h3>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <i class="fas fa-chart-line fa-3x text-primary mb-3"></i>
+                    <h4>Let's Get Started!</h4>
+                    <p class="text-muted">Set up your initial portfolio value to begin trading.</p>
+                </div>
+
+                <form method="POST">
+                    <div class="mb-4">
+                        <label for="initial_cash" class="form-label">
+                            <i class="fas fa-dollar-sign"></i> Initial Portfolio Value
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" 
+                                   class="form-control form-control-lg" 
+                                   id="initial_cash" 
+                                   name="initial_cash" 
+                                   step="0.01" 
+                                   min="0.01" 
+                                   placeholder="10000.00" 
+                                   required
+                                   autofocus>
+                        </div>
+                        <div class="form-text">
+                            Enter the amount you want to start trading with. This will be your initial cash balance.
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-check"></i> Initialize Portfolio
+                        </button>
+                    </div>
+                </form>
+
+                <div class="mt-4">
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> What happens next?</h6>
+                        <ul class="mb-0">
+                            <li>Your portfolio will be initialized with the specified cash balance</li>
+                            <li>You can start buying and selling stocks immediately</li>
+                            <li>All your trades and performance will be tracked</li>
+                            <li>You can view analytics and portfolio history</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

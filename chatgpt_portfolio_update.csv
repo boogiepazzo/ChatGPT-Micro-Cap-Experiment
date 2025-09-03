@@ -1,1 +1,4 @@
 Date,Ticker,Shares,Buy Price,Cost Basis,Stop Loss,Current Price,Total Value,PnL,Action,Cash Balance,Total Equity
+2025-09-02,TOTAL,,,,,,0.0,0.0,RESET,30000.0,30000.0
+2025-09-03,TSLA,50.0,329.36,16468.0,170.0,329.36,16468.0,0.0,HOLD,,
+2025-09-03,TOTAL,,,,,,16468.0,0.0,,13532.0,30000.0

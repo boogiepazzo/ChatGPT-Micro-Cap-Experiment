@@ -14,6 +14,9 @@
                 <a href="{{ url_for('trade') }}" class="btn btn-success">
                     <i class="fas fa-plus"></i> New Trade
                 </a>
+                <a href="{{ url_for('reset_portfolio') }}" class="btn btn-warning">
+                    <i class="fas fa-undo"></i> Reset Portfolio
+                </a>
             </div>
         </div>
     </div>
@@ -153,24 +156,29 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <a href="{{ url_for('trade') }}" class="btn btn-success btn-lg w-100 mb-2">
                             <i class="fas fa-plus"></i><br>Buy Stock
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <a href="{{ url_for('trade') }}?action=SELL" class="btn btn-danger btn-lg w-100 mb-2">
                             <i class="fas fa-minus"></i><br>Sell Stock
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <a href="{{ url_for('analytics') }}" class="btn btn-info btn-lg w-100 mb-2">
                             <i class="fas fa-chart-bar"></i><br>Analytics
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <a href="{{ url_for('portfolio_history') }}" class="btn btn-warning btn-lg w-100 mb-2">
                             <i class="fas fa-history"></i><br>History
+                        </a>
+                    </div>
+                    <div class="col-md-2">
+                        <a href="{{ url_for('reset_portfolio') }}" class="btn btn-danger btn-lg w-100 mb-2">
+                            <i class="fas fa-undo"></i><br>Reset
                         </a>
                     </div>
                 </div>

@@ -100,12 +100,14 @@ def load_portfolio_from_csv():
                     portfolio = pd.DataFrame(portfolio)
                 else:
                     portfolio = pd.DataFrame(columns=["ticker", "shares", "stop_loss", "buy_price", "cost_basis"])
+            elif portfolio is None:
+                portfolio = pd.DataFrame(columns=["ticker", "shares", "stop_loss", "buy_price", "cost_basis"])
             return portfolio, cash
         else:
-            return pd.DataFrame(), 10000.0  # Default starting cash
+            return pd.DataFrame(columns=["ticker", "shares", "stop_loss", "buy_price", "cost_basis"]), 10000.0  # Default starting cash
     except Exception as e:
         logger.error(f"Error loading portfolio: {e}")
-        return pd.DataFrame(), 10000.0
+        return pd.DataFrame(columns=["ticker", "shares", "stop_loss", "buy_price", "cost_basis"]), 10000.0
 
 def save_portfolio_to_csv(portfolio_df, cash):
     """Save portfolio to CSV file"""
@@ -116,44 +118,58 @@ def save_portfolio_to_csv(portfolio_df, cash):
         total_pnl = 0
         
         results = []
-        for _, stock in portfolio_df.iterrows():
-            ticker = str(stock["ticker"]).upper()
-            shares = float(stock["shares"]) if not pd.isna(stock["shares"]) else 0
-            cost = float(stock["buy_price"]) if not pd.isna(stock["buy_price"]) else 0.0
-            cost_basis = float(stock["cost_basis"]) if not pd.isna(stock["cost_basis"]) else cost * shares
-            stop = float(stock["stop_loss"]) if not pd.isna(stock["stop_loss"]) else 0.0
-            
-            current_price = get_current_price(ticker)
-            if current_price:
-                price = round(current_price, 2)
-                value = round(price * shares, 2)
-                pnl = round((price - cost) * shares, 2)
-                total_value += value
-                total_pnl += pnl
-                action = "HOLD"
-            else:
-                price = ""
-                value = ""
-                pnl = ""
-                action = "NO DATA"
-            
-            row = {
-                "Date": today, "Ticker": ticker, "Shares": shares,
-                "Buy Price": cost, "Cost Basis": cost_basis, "Stop Loss": stop,
-                "Current Price": price, "Total Value": value, "PnL": pnl,
-                "Action": action, "Cash Balance": "", "Total Equity": "",
-            }
-            results.append(row)
         
-        # Add total row
-        total_row = {
-            "Date": today, "Ticker": "TOTAL", "Shares": "", "Buy Price": "",
-            "Cost Basis": "", "Stop Loss": "", "Current Price": "",
-            "Total Value": round(total_value, 2), "PnL": round(total_pnl, 2),
-            "Action": "", "Cash Balance": round(cash, 2),
-            "Total Equity": round(total_value + cash, 2),
-        }
-        results.append(total_row)
+        # Handle empty portfolio
+        if portfolio_df is None or portfolio_df.empty:
+            # Just add total row for empty portfolio
+            total_row = {
+                "Date": today, "Ticker": "TOTAL", "Shares": "", "Buy Price": "",
+                "Cost Basis": "", "Stop Loss": "", "Current Price": "",
+                "Total Value": round(total_value, 2), "PnL": round(total_pnl, 2),
+                "Action": "", "Cash Balance": round(cash, 2),
+                "Total Equity": round(total_value + cash, 2),
+            }
+            results.append(total_row)
+        else:
+            # Process portfolio positions
+            for _, stock in portfolio_df.iterrows():
+                ticker = str(stock["ticker"]).upper()
+                shares = float(stock["shares"]) if not pd.isna(stock["shares"]) else 0
+                cost = float(stock["buy_price"]) if not pd.isna(stock["buy_price"]) else 0.0
+                cost_basis = float(stock["cost_basis"]) if not pd.isna(stock["cost_basis"]) else cost * shares
+                stop = float(stock["stop_loss"]) if not pd.isna(stock["stop_loss"]) else 0.0
+                
+                current_price = get_current_price(ticker)
+                if current_price:
+                    price = round(current_price, 2)
+                    value = round(price * shares, 2)
+                    pnl = round((price - cost) * shares, 2)
+                    total_value += value
+                    total_pnl += pnl
+                    action = "HOLD"
+                else:
+                    price = ""
+                    value = ""
+                    pnl = ""
+                    action = "NO DATA"
+                
+                row = {
+                    "Date": today, "Ticker": ticker, "Shares": shares,
+                    "Buy Price": cost, "Cost Basis": cost_basis, "Stop Loss": stop,
+                    "Current Price": price, "Total Value": value, "PnL": pnl,
+                    "Action": action, "Cash Balance": "", "Total Equity": "",
+                }
+                results.append(row)
+            
+            # Add total row
+            total_row = {
+                "Date": today, "Ticker": "TOTAL", "Shares": "", "Buy Price": "",
+                "Cost Basis": "", "Stop Loss": "", "Current Price": "",
+                "Total Value": round(total_value, 2), "PnL": round(total_pnl, 2),
+                "Action": "", "Cash Balance": round(cash, 2),
+                "Total Equity": round(total_value + cash, 2),
+            }
+            results.append(total_row)
         
         df_out = pd.DataFrame(results)
         
@@ -169,7 +185,88 @@ def save_portfolio_to_csv(portfolio_df, cash):
         logger.error(f"Error saving portfolio: {e}")
         return False
 
+def is_first_time_setup():
+    """Check if this is the first time setup (no portfolio file exists)"""
+    return not PORTFOLIO_CSV.exists()
+
 @app.route('/')
+def index():
+    """Main entry point - redirect to setup or dashboard"""
+    if is_first_time_setup():
+        return redirect(url_for('setup'))
+    else:
+        return redirect(url_for('dashboard'))
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    """Initial setup page for portfolio value"""
+    if request.method == 'POST':
+        try:
+            initial_cash = float(request.form['initial_cash'])
+            if initial_cash <= 0:
+                flash('Initial portfolio value must be greater than 0', 'error')
+                return render_template('setup.html')
+            
+            # Create initial portfolio with just cash
+            today = check_weekend()
+            initial_row = {
+                "Date": today, "Ticker": "TOTAL", "Shares": "", "Buy Price": "",
+                "Cost Basis": "", "Stop Loss": "", "Current Price": "",
+                "Total Value": 0.0, "PnL": 0.0,
+                "Action": "", "Cash Balance": round(initial_cash, 2),
+                "Total Equity": round(initial_cash, 2),
+            }
+            
+            df_out = pd.DataFrame([initial_row])
+            df_out.to_csv(PORTFOLIO_CSV, index=False)
+            
+            flash(f'Portfolio initialized with ${initial_cash:,.2f}', 'success')
+            return redirect(url_for('dashboard'))
+            
+        except ValueError:
+            flash('Please enter a valid number for initial portfolio value', 'error')
+            return render_template('setup.html')
+    
+    return render_template('setup.html')
+
+@app.route('/reset_portfolio', methods=['GET', 'POST'])
+def reset_portfolio():
+    """Reset portfolio - clear all positions but keep logs"""
+    if request.method == 'POST':
+        try:
+            # Get current cash balance
+            portfolio_df, cash = load_portfolio_from_csv()
+            
+            # Create new portfolio with just cash
+            today = check_weekend()
+            reset_row = {
+                "Date": today, "Ticker": "TOTAL", "Shares": "", "Buy Price": "",
+                "Cost Basis": "", "Stop Loss": "", "Current Price": "",
+                "Total Value": 0.0, "PnL": 0.0,
+                "Action": "RESET", "Cash Balance": round(cash, 2),
+                "Total Equity": round(cash, 2),
+            }
+            
+            # Append reset row to existing portfolio history
+            if PORTFOLIO_CSV.exists():
+                existing = pd.read_csv(PORTFOLIO_CSV)
+                df_out = pd.concat([existing, pd.DataFrame([reset_row])], ignore_index=True)
+            else:
+                df_out = pd.DataFrame([reset_row])
+            
+            df_out.to_csv(PORTFOLIO_CSV, index=False)
+            
+            flash('Portfolio reset successfully. All positions cleared, logs preserved.', 'success')
+            return redirect(url_for('dashboard'))
+            
+        except Exception as e:
+            logger.error(f"Error resetting portfolio: {e}")
+            flash(f'Error resetting portfolio: {str(e)}', 'error')
+            return redirect(url_for('dashboard'))
+    
+    return render_template('reset_portfolio.html')
+
+@app.route('/dashboard')
 def dashboard():
     """Main dashboard showing portfolio overview"""
     portfolio_df, cash = load_portfolio_from_csv()
@@ -178,40 +275,44 @@ def dashboard():
     total_value = 0
     portfolio_data = []
     
-    # Handle case where portfolio_df might be a list
+    # Handle case where portfolio_df might be a list or None
     if isinstance(portfolio_df, list):
         if portfolio_df:
             portfolio_df = pd.DataFrame(portfolio_df)
         else:
             portfolio_df = pd.DataFrame(columns=["ticker", "shares", "stop_loss", "buy_price", "cost_basis"])
+    elif portfolio_df is None:
+        portfolio_df = pd.DataFrame(columns=["ticker", "shares", "stop_loss", "buy_price", "cost_basis"])
     
-    for _, stock in portfolio_df.iterrows():
-        ticker = str(stock["ticker"]).upper()
-        shares = float(stock["shares"]) if not pd.isna(stock["shares"]) else 0
-        cost = float(stock["buy_price"]) if not pd.isna(stock["buy_price"]) else 0.0
-        cost_basis = float(stock["cost_basis"]) if not pd.isna(stock["cost_basis"]) else cost * shares
-        stop = float(stock["stop_loss"]) if not pd.isna(stock["stop_loss"]) else 0.0
-        
-        current_price = get_current_price(ticker)
-        if current_price:
-            current_value = current_price * shares
-            current_pnl = (current_price - cost) * shares
-            total_value += current_value
-        else:
-            current_price = 0
-            current_value = 0
-            current_pnl = 0
-        
-        portfolio_data.append({
-            'ticker': ticker,
-            'shares': shares,
-            'buy_price': cost,
-            'cost_basis': cost_basis,
-            'stop_loss': stop,
-            'current_price': current_price,
-            'current_value': current_value,
-            'current_pnl': current_pnl
-        })
+    # Only process if portfolio_df is not empty
+    if not portfolio_df.empty:
+        for _, stock in portfolio_df.iterrows():
+            ticker = str(stock["ticker"]).upper()
+            shares = float(stock["shares"]) if not pd.isna(stock["shares"]) else 0
+            cost = float(stock["buy_price"]) if not pd.isna(stock["buy_price"]) else 0.0
+            cost_basis = float(stock["cost_basis"]) if not pd.isna(stock["cost_basis"]) else cost * shares
+            stop = float(stock["stop_loss"]) if not pd.isna(stock["stop_loss"]) else 0.0
+            
+            current_price = get_current_price(ticker)
+            if current_price:
+                current_value = current_price * shares
+                current_pnl = (current_price - cost) * shares
+                total_value += current_value
+            else:
+                current_price = 0
+                current_value = 0
+                current_pnl = 0
+            
+            portfolio_data.append({
+                'ticker': ticker,
+                'shares': shares,
+                'buy_price': cost,
+                'cost_basis': cost_basis,
+                'stop_loss': stop,
+                'current_price': current_price,
+                'current_value': current_value,
+                'current_pnl': current_pnl
+            })
     
     total_equity = total_value + cash
     
@@ -314,40 +415,44 @@ def trade():
     total_value = 0
     portfolio_data = []
     
-    # Handle case where portfolio_df might be a list
+    # Handle case where portfolio_df might be a list or None
     if isinstance(portfolio_df, list):
         if portfolio_df:
             portfolio_df = pd.DataFrame(portfolio_df)
         else:
             portfolio_df = pd.DataFrame(columns=["ticker", "shares", "stop_loss", "buy_price", "cost_basis"])
+    elif portfolio_df is None:
+        portfolio_df = pd.DataFrame(columns=["ticker", "shares", "stop_loss", "buy_price", "cost_basis"])
     
-    for _, stock in portfolio_df.iterrows():
-        ticker = str(stock["ticker"]).upper()
-        shares = float(stock["shares"]) if not pd.isna(stock["shares"]) else 0
-        cost = float(stock["buy_price"]) if not pd.isna(stock["buy_price"]) else 0.0
-        cost_basis = float(stock["cost_basis"]) if not pd.isna(stock["cost_basis"]) else cost * shares
-        stop = float(stock["stop_loss"]) if not pd.isna(stock["stop_loss"]) else 0.0
-        
-        current_price = get_current_price(ticker)
-        if current_price:
-            current_value = current_price * shares
-            current_pnl = (current_price - cost) * shares
-            total_value += current_value
-        else:
-            current_price = 0
-            current_value = 0
-            current_pnl = 0
-        
-        portfolio_data.append({
-            'ticker': ticker,
-            'shares': shares,
-            'buy_price': cost,
-            'cost_basis': cost_basis,
-            'stop_loss': stop,
-            'current_price': current_price,
-            'current_value': current_value,
-            'current_pnl': current_pnl
-        })
+    # Only process if portfolio_df is not empty
+    if not portfolio_df.empty:
+        for _, stock in portfolio_df.iterrows():
+            ticker = str(stock["ticker"]).upper()
+            shares = float(stock["shares"]) if not pd.isna(stock["shares"]) else 0
+            cost = float(stock["buy_price"]) if not pd.isna(stock["buy_price"]) else 0.0
+            cost_basis = float(stock["cost_basis"]) if not pd.isna(stock["cost_basis"]) else cost * shares
+            stop = float(stock["stop_loss"]) if not pd.isna(stock["stop_loss"]) else 0.0
+            
+            current_price = get_current_price(ticker)
+            if current_price:
+                current_value = current_price * shares
+                current_pnl = (current_price - cost) * shares
+                total_value += current_value
+            else:
+                current_price = 0
+                current_value = 0
+                current_pnl = 0
+            
+            portfolio_data.append({
+                'ticker': ticker,
+                'shares': shares,
+                'buy_price': cost,
+                'cost_basis': cost_basis,
+                'stop_loss': stop,
+                'current_price': current_price,
+                'current_value': current_value,
+                'current_pnl': current_pnl
+            })
     
     return render_template('trade.html', 
                          portfolio=portfolio_data,
@@ -478,12 +583,14 @@ def run_daily_update():
     try:
         portfolio_df, cash = load_portfolio_from_csv()
         
-        # Handle case where portfolio_df might be a list
+        # Handle case where portfolio_df might be a list or None
         if isinstance(portfolio_df, list):
             if portfolio_df:
                 portfolio_df = pd.DataFrame(portfolio_df)
             else:
                 portfolio_df = pd.DataFrame(columns=["ticker", "shares", "stop_loss", "buy_price", "cost_basis"])
+        elif portfolio_df is None:
+            portfolio_df = pd.DataFrame(columns=["ticker", "shares", "stop_loss", "buy_price", "cost_basis"])
         
         # Run the portfolio processing (non-interactive)
         updated_portfolio, updated_cash = process_portfolio(
